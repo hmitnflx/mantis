@@ -19,6 +19,9 @@ package io.mantisrx.runtime.beam;
 import io.mantisrx.runtime.MantisJob;
 import io.mantisrx.runtime.beam.api.MantisConfig;
 import io.mantisrx.runtime.beam.api.MantisInstance;
+import java.util.Arrays;
+import java.util.List;
+import java.util.function.Function;
 import org.apache.beam.runners.core.SplittableParDoViaKeyedWorkItems;
 import org.apache.beam.runners.core.construction.PTransformMatchers;
 import org.apache.beam.runners.core.construction.SplittableParDo;
@@ -31,10 +34,6 @@ import org.apache.beam.sdk.runners.PTransformOverride;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Function;
 
 public class MantisRunner extends PipelineRunner<MantisPipelineResult> {
   private static final Logger LOG = LoggerFactory.getLogger(MantisRunner.class);
@@ -53,18 +52,18 @@ public class MantisRunner extends PipelineRunner<MantisPipelineResult> {
   public static MantisRunner fromOptions(
       PipelineOptions options,
       Function<MantisConfig, MantisInstance> mantisProvider,
-      Function<PTransform<?, ?>, MantisTransformTranslator<?>> translatorProvider) {
+      Function<PTransform<?, ?>, IMantisTransformTranslator<?>> translatorProvider) {
     return new MantisRunner(options, mantisProvider, translatorProvider);
   }
 
   private final MantisPipelineOptions options;
   private final Function<MantisConfig, MantisInstance> mantisProvider;
-  private final Function<PTransform<?, ?>, MantisTransformTranslator<?>> translatorProvider;
+  private final Function<PTransform<?, ?>, IMantisTransformTranslator<?>> translatorProvider;
 
   private MantisRunner(
       PipelineOptions options,
       Function<MantisConfig, MantisInstance> mantisProvider,
-      Function<PTransform<?, ?>, MantisTransformTranslator<?>> translatorProvider) {
+      Function<PTransform<?, ?>, IMantisTransformTranslator<?>> translatorProvider) {
     this.options = validate(options.as(MantisPipelineOptions.class));
     this.mantisProvider = mantisProvider;
     this.translatorProvider = translatorProvider;

@@ -16,34 +16,18 @@
 
 package io.mantisrx.runtime.beam;
 
-import java.io.IOException;
-import org.apache.beam.sdk.PipelineResult;
-import org.apache.beam.sdk.metrics.MetricResults;
-import org.joda.time.Duration;
+import io.mantisrx.common.codec.Codec;
 
-public class MantisPipelineResult implements PipelineResult {
-  @Override
-  public State getState() {
-    return null;
-  }
+public class MantisByteCodec implements Codec<byte[]> {
+    public static final MantisByteCodec INSTANCE = new MantisByteCodec();
 
-  @Override
-  public State cancel() throws IOException {
-    return null;
-  }
+    @Override
+    public byte[] decode(byte[] bytes) {
+        return bytes;
+    }
 
-  @Override
-  public State waitUntilFinish(Duration duration) {
-    return null;
-  }
-
-  @Override
-  public State waitUntilFinish() {
-    return null;
-  }
-
-  @Override
-  public MetricResults metrics() {
-    return null;
-  }
+    @Override
+    public byte[] encode(byte[] value) {
+        return value;
+    }
 }

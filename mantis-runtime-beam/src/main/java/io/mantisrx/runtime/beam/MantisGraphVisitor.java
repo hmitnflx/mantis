@@ -32,11 +32,11 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
   private boolean finalized = false;
   private final PipelineOptions options;
   private final MantisTranslationContext translationContext;
-  private final Function<PTransform<?, ?>, MantisTransformTranslator<?>> translatorProvider;
+  private final Function<PTransform<?, ?>, IMantisTransformTranslator<?>> translatorProvider;
 
   public MantisGraphVisitor(
       MantisPipelineOptions options,
-      Function<PTransform<?, ?>, MantisTransformTranslator<?>> translatorProvider) {
+      Function<PTransform<?, ?>, IMantisTransformTranslator<?>> translatorProvider) {
     this.options = options;
     this.translationContext = new MantisTranslationContext(options);
     this.translatorProvider = translatorProvider;
@@ -50,7 +50,7 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
 
     PTransform<?, ?> transform = node.getTransform();
     if (transform != null) {
-      MantisTransformTranslator<?> translator = translatorProvider.apply(transform);
+      IMantisTransformTranslator<?> translator = translatorProvider.apply(transform);
       if (translator != null) {
         translate(node, translator);
         return CompositeBehavior.DO_NOT_ENTER_TRANSFORM;
@@ -72,7 +72,7 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
   @Override
   public void visitPrimitiveTransform(TransformHierarchy.Node node) {
     PTransform<?, ?> transform = node.getTransform();
-    MantisTransformTranslator<?> translator = translatorProvider.apply(transform);
+    IMantisTransformTranslator<?> translator = translatorProvider.apply(transform);
     if (translator == null) {
       String transformUrn = PTransformTranslation.urnForTransform(transform);
       throw new UnsupportedOperationException(
@@ -82,10 +82,10 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
   }
 
   private <T extends PTransform<?, ?>> void translate(
-      TransformHierarchy.Node node, MantisTransformTranslator<?> translator) {
+      TransformHierarchy.Node node, IMantisTransformTranslator<?> translator) {
 
     @SuppressWarnings("unchecked")
-    MantisTransformTranslator<T> typedTranslator = (MantisTransformTranslator<T>) translator;
+    IMantisTransformTranslator<T> typedTranslator = (IMantisTransformTranslator<T>) translator;
     Pipeline pipeline = getPipeline();
     AppliedPTransform<?, ?, ?> appliedTransform = node.toAppliedPTransform(pipeline);
     typedTranslator.translate(pipeline, appliedTransform, node, translationContext);

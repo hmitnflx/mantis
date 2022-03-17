@@ -21,7 +21,7 @@ import org.apache.beam.sdk.runners.AppliedPTransform;
 import org.apache.beam.sdk.runners.TransformHierarchy;
 import org.apache.beam.sdk.transforms.PTransform;
 
-public interface MantisTransformTranslator<T extends PTransform> {
+public interface IMantisTransformTranslator<T extends PTransform> {
   MantisJobBuilder translate(
       Pipeline pipeline,
       AppliedPTransform<?, ?, ?> appliedTransform,

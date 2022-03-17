@@ -16,11 +16,10 @@
 
 package io.mantisrx.runtime.beam;
 
+import java.util.Collections;
 import org.apache.beam.sdk.metrics.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Duration;
-
-import java.util.Collections;
 
 /**
  * Alternative implementation of {@link MantisPipelineResult} used to avoid throwing Exceptions in

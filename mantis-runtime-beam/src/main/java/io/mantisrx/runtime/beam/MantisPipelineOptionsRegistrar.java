@@ -16,8 +16,8 @@
 
 package io.mantisrx.runtime.beam;
 
-import org.apache.beam.sdk.options.PipelineOptionsRegistrar;
 import com.google.auto.service.AutoService;
+import org.apache.beam.sdk.options.PipelineOptionsRegistrar;
 
 @AutoService(MantisPipelineOptionsRegistrar.class)
 public interface MantisPipelineOptionsRegistrar extends PipelineOptionsRegistrar {

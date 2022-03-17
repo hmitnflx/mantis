@@ -33,9 +33,6 @@ public class ImpulseSource implements Source<byte[]> {
   @Override
   public Observable<Observable<byte[]>> call(Context context, Index index) {
     byte[] value = Utils.encode(WindowedValue.valueInGlobalWindow(new byte[0]), outputCoder);
-    // This won't actually work because we'd like to have
-    // the logic here to process any splits created after the impulse.
-    // Need to see how it could be modeled in the ParDo format.
     return Observable.just(Observable.just(value));
   }
 }

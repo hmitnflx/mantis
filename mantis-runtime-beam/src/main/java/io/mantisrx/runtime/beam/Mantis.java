@@ -18,34 +18,33 @@ package io.mantisrx.runtime.beam;
 
 import io.mantisrx.runtime.beam.api.MantisConfig;
 import io.mantisrx.runtime.beam.api.MantisInstance;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.beam.runners.core.construction.PTransformTranslation;
 import org.apache.beam.sdk.transforms.PTransform;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class Mantis {
-  private static final Map<String, MantisTransformTranslator<?>> TRANSLATORS = new HashMap<>();
+  private static final Map<String, IMantisTransformTranslator<?>> TRANSLATORS = new HashMap<>();
 
   static {
     TRANSLATORS.put(
-        PTransformTranslation.READ_TRANSFORM_URN, new Translators.ReadSourceTranslator());
-    TRANSLATORS.put(PTransformTranslation.PAR_DO_TRANSFORM_URN, new Translators.ParDoTranslator());
+        PTransformTranslation.READ_TRANSFORM_URN, new MantisTransformTranslators.ReadSourceTranslator());
+    TRANSLATORS.put(PTransformTranslation.PAR_DO_TRANSFORM_URN, new MantisTransformTranslators.ParDoTranslatorI());
     TRANSLATORS.put(
-        PTransformTranslation.GROUP_BY_KEY_TRANSFORM_URN, new Translators.GroupByKeyTranslator<>());
+        PTransformTranslation.GROUP_BY_KEY_TRANSFORM_URN, new MantisTransformTranslators.GroupByKeyTranslator<>());
     TRANSLATORS.put(
-        PTransformTranslation.FLATTEN_TRANSFORM_URN, new Translators.FlattenTranslator());
+        PTransformTranslation.FLATTEN_TRANSFORM_URN, new MantisTransformTranslators.FlattenTranslator());
     TRANSLATORS.put(
-        PTransformTranslation.ASSIGN_WINDOWS_TRANSFORM_URN, new Translators.WindowTranslator());
+        PTransformTranslation.ASSIGN_WINDOWS_TRANSFORM_URN, new MantisTransformTranslators.WindowTranslator());
     TRANSLATORS.put(
-        PTransformTranslation.IMPULSE_TRANSFORM_URN, new Translators.ImpulseTranslator());
+        PTransformTranslation.IMPULSE_TRANSFORM_URN, new MantisTransformTranslators.ImpulseTranslator());
   }
 
   public static MantisInstance newMantisClient(MantisConfig mantisConfig) {
     return new MantisInstance();
   }
 
-  static MantisTransformTranslator<?> translatorProvider(PTransform<?, ?> pTransform) {
+  static IMantisTransformTranslator<?> translatorProvider(PTransform<?, ?> pTransform) {
     String urn = PTransformTranslation.urnForTransformOrNull(pTransform);
     return (urn == null) ? null : TRANSLATORS.get(urn);
   }

@@ -14,15 +14,10 @@
  * limitations under the License.
  */
 
-configurations.all {
-    resolutionStrategy {
-        force "com.google.guava:guava:18.0"
-    }
-}
-
 dependencies {
+    annotationProcessor 'com.google.auto.value:auto-value:1.4'
+    api 'com.jakewharton.auto.value:auto-value-annotations:1.4'
     implementation project(':mantis-runtime')
-    implementation "org.apache.beam:beam-sdks-java-core:2.35.0"
-    implementation "org.apache.beam:beam-runners-core-java:2.35.0"
-    compile "com.google.auto.service:auto-service:1.0-rc6"
+    implementation libraries.beam
+    api "com.google.auto.service:auto-service:1.0-rc6"
 }

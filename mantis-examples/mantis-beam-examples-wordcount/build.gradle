@@ -1,0 +1,20 @@
+apply plugin: 'java-library'
+
+task execute(type: JavaExec) {
+    main = "com.netflix.mantis.samples.beam.WordCount"
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+ext {
+    mantisConnectorsVersion = '1.2.5'
+}
+
+dependencies {
+    implementation project(':mantis-runtime')
+    implementation project(":mantis-runtime-beam")
+    implementation libraries.beam
+    implementation "io.mantisrx:mantis-connector-job:$mantisConnectorsVersion"
+
+    implementation libraries.slf4jApi
+    implementation libraries.slf4jLog4j12
+}
