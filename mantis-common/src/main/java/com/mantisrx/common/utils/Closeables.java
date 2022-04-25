@@ -17,7 +17,6 @@
 package com.mantisrx.common.utils;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -30,17 +29,17 @@ public class Closeables {
      * @param closeables closeables that all need to be closed
      * @return a composite closeable
      */
-    public static Closeable combine(Collection<? extends Closeable> closeables) {
-        return combine(closeables.toArray(new Closeable[0]));
+    public static Closeable combine(Collection<? extends AutoCloseable> closeables) {
+        return combine(closeables.toArray(new AutoCloseable[0]));
     }
 
-    public static Closeable combine(Closeable... closeables) {
+    public static Closeable combine(AutoCloseable... closeables) {
         return () -> {
             List<Throwable> list = new ArrayList<>();
-            for (Closeable closeable: closeables) {
+            for (AutoCloseable closeable: closeables) {
                 try {
                     closeable.close();
-                } catch (IOException e) {
+                } catch (Exception e) {
                     list.add(new Exception(String.format("Failed to close %s", closeable), e));
                 }
             }

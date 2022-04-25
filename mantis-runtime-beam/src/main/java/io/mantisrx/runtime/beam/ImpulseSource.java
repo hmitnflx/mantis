@@ -35,4 +35,8 @@ public class ImpulseSource implements Source<byte[]> {
     byte[] value = Utils.encode(WindowedValue.valueInGlobalWindow(new byte[0]), outputCoder);
     return Observable.just(Observable.just(value));
   }
+
+    @Override
+    public void close() {
+    }
 }

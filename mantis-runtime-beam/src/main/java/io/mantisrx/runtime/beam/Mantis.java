@@ -28,14 +28,15 @@ public class Mantis {
 
   static {
     TRANSLATORS.put(
-        PTransformTranslation.READ_TRANSFORM_URN, new MantisTransformTranslators.ReadSourceTranslator());
-    TRANSLATORS.put(PTransformTranslation.PAR_DO_TRANSFORM_URN, new MantisTransformTranslators.ParDoTranslatorI());
+        PTransformTranslation.READ_TRANSFORM_URN, new MantisTransformTranslators.ReadSourceTranslator<>());
+    TRANSLATORS.put(PTransformTranslation.CREATE_VIEW_TRANSFORM_URN, new MantisTransformTranslators.CreateViewTranslator<>());
+    TRANSLATORS.put(PTransformTranslation.PAR_DO_TRANSFORM_URN, new MantisTransformTranslators.ParDoTranslator<>());
     TRANSLATORS.put(
         PTransformTranslation.GROUP_BY_KEY_TRANSFORM_URN, new MantisTransformTranslators.GroupByKeyTranslator<>());
     TRANSLATORS.put(
-        PTransformTranslation.FLATTEN_TRANSFORM_URN, new MantisTransformTranslators.FlattenTranslator());
+        PTransformTranslation.FLATTEN_TRANSFORM_URN, new MantisTransformTranslators.FlattenTranslator<>());
     TRANSLATORS.put(
-        PTransformTranslation.ASSIGN_WINDOWS_TRANSFORM_URN, new MantisTransformTranslators.WindowTranslator());
+        PTransformTranslation.ASSIGN_WINDOWS_TRANSFORM_URN, new MantisTransformTranslators.WindowTranslator<>());
     TRANSLATORS.put(
         PTransformTranslation.IMPULSE_TRANSFORM_URN, new MantisTransformTranslators.ImpulseTranslator());
   }

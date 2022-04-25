@@ -21,13 +21,8 @@ import io.mantisrx.runtime.Context;
 import io.mantisrx.runtime.GroupToScalar;
 import io.mantisrx.runtime.ScalarToGroup;
 import io.mantisrx.runtime.ScalarToScalar;
-import io.mantisrx.runtime.computation.GroupToScalarComputation;
-import io.mantisrx.runtime.computation.ScalarComputation;
 import io.mantisrx.runtime.computation.ToGroupComputation;
-import java.util.Collection;
-import java.util.Map;
-import java.util.stream.Collectors;
-import org.apache.beam.repackaged.direct_java.runners.core.InMemoryTimerInternals;
+import org.apache.beam.runners.core.InMemoryTimerInternals;
 import org.apache.beam.runners.core.LateDataUtils;
 import org.apache.beam.runners.core.construction.SerializablePipelineOptions;
 import org.apache.beam.sdk.Pipeline;
@@ -43,6 +38,10 @@ import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Iterables;
 import org.joda.time.Instant;
 import rx.Observable;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class MantisTransformTranslators {
 
@@ -104,24 +103,22 @@ public class MantisTransformTranslators {
                       obs.map(item -> {
                         WindowedValue<KV<K, V>> windowedkv =
                                 Utils.decodeWindowedValue(item, inputCoder);
+
                         KV<K, V> kv = windowedkv.getValue();
                         //todo(hmittal): drop late arriving data here
                         //   also, expired windows here to avoid extra data transmission!
                         return new MantisGroup<>(Utils.encode(kv.getKey(), kvValueCoder.getKeyCoder()), item);
                       }), new ScalarToGroup.Config<byte[], byte[], byte[]>()
-                      .description(String.format("group stage for beam group-by-key %s", appliedTransform.getFullName()))
+                      .description(String.format("group stage for beam group-by-key %s", Utils.stringifyTransform(appliedTransform)))
                       .codec(MantisByteCodec.INSTANCE))
-              .addStage((GroupToScalarComputation<byte[], byte[], byte[]>) (ctx, obs) -> {
-                //todo(hmittal): do things here using ReduceFnRunner
-                return null;
-              }, new GroupToScalar.Config<byte[], byte[], byte[]>()
-                      .description(String.format("scalar stage for beam group-by-key %s", appliedTransform.getFullName()))
+              .addStage(new BeamGroupToScalarComputation<K, V>(appliedTransform), new GroupToScalar.Config<byte[], byte[], byte[]>()
+                      .description(String.format("scalar stage for beam group-by-key %s", Utils.stringifyTransform(appliedTransform)))
                       .codec(MantisByteCodec.INSTANCE));
       return jobBuilder;
     }
   }
 
-  public static class ParDoTranslatorI<T>
+  public static class ParDoTranslator<T>
       implements IMantisTransformTranslator<PTransform<PCollection<T>, PCollectionTuple>> {
     @Override
     public MantisJobBuilder translate(
@@ -129,7 +126,9 @@ public class MantisTransformTranslators {
         AppliedPTransform<?, ?, ?> appliedTransform,
         TransformHierarchy.Node node,
         MantisTranslationContext context) {
-      context.getMantisJobBuilder().addStage(new ParDoScalarStage(appliedTransform), new ScalarToScalar.Config());
+      context.getMantisJobBuilder().addStage(new ParDoScalarStage<>(appliedTransform), new ScalarToScalar.Config()
+              .description(String.format("scalar stage for beam par-do %s", Utils.stringifyTransform(appliedTransform)))
+              .codec(MantisByteCodec.INSTANCE));
       return context.getMantisJobBuilder();
     }
   }
@@ -148,10 +147,17 @@ public class MantisTransformTranslators {
       Map.Entry<TupleTag<?>, PCollection<?>> output = Utils.getOutput(appliedTransform);
       Coder outputCoder = Utils.getCoder(output.getValue());
       return context.getMantisJobBuilder().addStage(
-              (ScalarComputation<byte[], byte[]>) (context1, observable) -> observable.map(item -> {
-                WindowedValue<Object> windowedValue = Utils.decodeWindowedValue(item, inputCoders.values().stream().findFirst().get());
-                return Utils.encode(windowedValue, outputCoder);
-              }), new ScalarToScalar.Config<>());
+              new BeamScalarComputation<byte[], byte[]>(appliedTransform) {
+                  @Override
+                  public Observable<byte[]> call(Context context, Observable<byte[]> observable) {
+                      return observable.map(item -> {
+                          WindowedValue<Object> windowedValue = Utils.decodeWindowedValue(item, inputCoders.values().stream().findFirst().get());
+                          return Utils.encode(windowedValue, outputCoder);
+                      });
+                  }
+              }, new ScalarToScalar.Config()
+                      .description(String.format("scalar stage for beam flatten %s", Utils.stringifyTransform(appliedTransform)))
+                      .codec(MantisByteCodec.INSTANCE));
     }
   }
 
@@ -191,7 +197,7 @@ public class MantisTransformTranslators {
           Utils.getCoder((PCollection) Utils.getOutput(appliedTransform).getValue());
 
       MantisJobBuilder job = context.getMantisJobBuilder()
-              .addStage(new ScalarComputation<byte[], byte[]>() {
+              .addStage(new BeamScalarComputation<byte[], byte[]>(appliedTransform) {
                   private WindowAssignCtx windowsAssignCtx;
 
                   @Override
@@ -218,7 +224,8 @@ public class MantisTransformTranslators {
                           }
                       });
                   }
-              }, new ScalarToScalar.Config());
+              }, new ScalarToScalar.Config().description(String.format("scalar stage for beam window %s", Utils.stringifyTransform(appliedTransform)))
+                      .codec(MantisByteCodec.INSTANCE));
 
       return job;
     }

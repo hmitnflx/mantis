@@ -20,28 +20,66 @@ import io.mantisrx.runtime.*;
 import io.mantisrx.runtime.computation.*;
 import io.mantisrx.runtime.sink.SelfDocumentingSink;
 import io.mantisrx.runtime.sink.Sink;
+import io.mantisrx.runtime.sink.Sinks;
 import io.mantisrx.runtime.source.Source;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import rx.Observable;
 
+@Slf4j
 public class MantisJobBuilder {
   private SourceHolder sourceHolder;
   private Stages currentStage;
   private Config jobConfig;
+  private CompositeScalarFunction compositeScalarFn;
 
   MantisJobBuilder() {}
 
+  Job buildJob() {
+    ScalarStages<Object> stage = ((ScalarStages) currentStage);
+      Config<Object> jobConfig = stage.sink(Sinks.eagerSubscribe(new SelfDocumentingSink<Object>() {
+          @Override
+          public Metadata metadata() {
+              return new Metadata.Builder().description("eager print sink").build();
+          }
+
+          @Override
+          public void close() {
+          }
+
+          @Override
+          public void call(Context context, PortRequest portRequest, Observable<Object> objectObservable) {
+              objectObservable.subscribe(o -> log.info("sink output {}", o));
+          }
+      }));
+    return jobConfig.create();
+  }
   public MantisJobBuilder addStage(Source source) {
     this.sourceHolder = MantisJob.source(source);
     return this;
   }
 
   public MantisJobBuilder addStage(Computation compFn, Object config) {
-    if (this.currentStage == null) {
-      if (this.sourceHolder == null) {
-        throw new IllegalArgumentException(
-            "SourceHolder not currently set. Uninitialized MantisJob configuration");
+    if (this.sourceHolder == null) {
+      throw new IllegalArgumentException(
+              "SourceHolder not currently set. Uninitialized MantisJob configuration");
+    }
+    if (config instanceof ScalarToScalar.Config) {
+      if (compositeScalarFn == null) {
+        compositeScalarFn = new CompositeScalarFunction<>();
       }
-      this.currentStage = addInitStage(compFn, config);
+      compositeScalarFn.addScalarFn((ScalarComputation) compFn, ((ScalarToScalar.Config<?, ?>) config));
     } else {
+      if (compositeScalarFn != null && compositeScalarFn.size() > 0) {
+        if (currentStage == null) {
+          this.currentStage = addInitStage(compositeScalarFn, compositeScalarFn.getConfig());
+        } else {
+          this.currentStage = addMoreStages(compositeScalarFn, compositeScalarFn.getConfig());
+        }
+        this.compositeScalarFn = null;
+      }
       this.currentStage = addMoreStages(compFn, config);
     }
     return this;
@@ -72,7 +110,8 @@ public class MantisJobBuilder {
     if (this.currentStage instanceof ScalarStages) {
       ScalarStages scalarStages = (ScalarStages) this.currentStage;
       if (config instanceof ScalarToScalar.Config) {
-        return scalarStages.stage((ScalarComputation) compFn, (ScalarToScalar.Config) config);
+        ScalarComputation scalarFn = (ScalarComputation) compFn;
+        return scalarStages.stage(scalarFn, (ScalarToScalar.Config) config);
       } else if (config instanceof ScalarToKey.Config) {
         return scalarStages.stage((ToKeyComputation) compFn, (ScalarToKey.Config) config);
       }
@@ -87,5 +126,50 @@ public class MantisJobBuilder {
       return keyedStages.stage((KeyComputation) compFn, (KeyToKey.Config) config);
     }
     return keyedStages.stage((GroupComputation) compFn, (GroupToGroup.Config) config);
+  }
+
+  private static class CompositeScalarFunction<T> extends BeamScalarComputation<T, T> {
+    public final List<ScalarComputation<T, T>> scalarFns = new ArrayList<>();
+    public ScalarToScalar.Config<T,T> config;
+
+    public CompositeScalarFunction() {
+      super(null);
+    }
+
+    public void addScalarFn(ScalarComputation<T, T> fn, ScalarToScalar.Config<T, T> config) {
+      this.scalarFns.add(fn);
+      this.config = config;
+    }
+
+    @Override
+    public String stringifyTransform() {
+      return scalarFns.stream()
+              .map(fn -> (fn instanceof BeamScalarComputation)
+               ? ((BeamScalarComputation<T, T>) fn).stringifyTransform() :
+                String.format("scalarfn.class.%s",fn.getClass().getName()))
+              .collect(Collectors.joining("\n"));
+    }
+
+    @Override
+    public void init(Context context) {
+      this.scalarFns.forEach(x -> x.init(context));
+    }
+
+    @Override
+    public Observable<T> call(Context context, Observable<T> tObservable) {
+      Observable<T> result = tObservable;
+      for (ScalarComputation<T,T> fn : this.scalarFns) {
+        result = fn.call(context, result);
+      }
+      return result;
+    }
+
+    public int size() {
+      return scalarFns.size();
+    }
+
+    public ScalarToScalar.Config<T,T> getConfig() {
+      return config.description(String.format("scalar stage for beam composite %s", stringifyTransform()));
+    }
   }
 }

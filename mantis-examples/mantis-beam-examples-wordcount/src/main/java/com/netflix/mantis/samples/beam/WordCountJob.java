@@ -18,7 +18,7 @@ package com.netflix.mantis.samples.beam;
 
 import java.util.function.Function;
 import org.apache.beam.sdk.Pipeline;
-import org.apache.beam.sdk.io.TextIO;
+import org.apache.beam.sdk.io.GenerateSequence;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
 import org.apache.beam.sdk.metrics.Metrics;
@@ -26,13 +26,10 @@ import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
-import org.apache.beam.sdk.options.Validation.Required;
 import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.transforms.windowing.GlobalWindows;
-import org.apache.beam.sdk.transforms.windowing.TimestampCombiner;
-import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,27 +63,36 @@ public class WordCountJob {
         // */
         final Instant tnow = Instant.now();
         log.info("hmittal tnow {}", tnow);
-        p.apply("ReadLines", TextIO.read().from(options.getInputFile()))
-                .apply("SetTimeStampCombiner",
-                        Window
-                                .<String>into(new GlobalWindows())
-                                .withTimestampCombiner(TimestampCombiner.EARLIEST))
-                .apply(Sample.any(5))
-                // /*
+
+
+        PCollection<Long> sample = p.apply("sample", GenerateSequence.from(0)
+                .withRate(100, Duration.standardSeconds(1))
+                .withMaxReadTime(Duration.standardMinutes(10)));/*
                 .apply(display.apply("read"))
-                .apply(ParDo.of(new DoFn<String, String>() {
-                    @ProcessElement
-                    public void processElement(@Element String c, OutputReceiver<String> out) {
-                        out.outputWithTimestamp(c, tnow);
+                .apply(MapElements.via(new SimpleFunction<String, Integer>() {
+                    @Override
+                    public Integer apply(String input) {
+                        switch (input) {
+                            case "one": return 1;
+                            case "two": return 2;
+                            case "three": return 3;
+                        }
+                        return 0;
                     }
                 }))
-                .apply(display.apply("timestamp"))
-                // */
-                .apply(new CountWords())
-                .apply(MapElements.via(new FormatAsTextFn()))
-                .apply("WriteCounts", TextIO.write().to(options.getOutput()));
+                .apply(MapElements.via(new SimpleFunction<Integer, String>() {
+                    @Override
+                    public String apply(Integer input) {
+                        return input.toString();
+                    }
+                }))
+                //.apply(new CountWords())
+                //.apply(MapElements.via(new FormatAsTextFn()))
+                .apply("WriteCounts", TextIO.write().to(options.getOutput()))
+        */
 
-        p.run().waitUntilFinish();
+        Pipeline p1 = sample.getPipeline();
+        p1.run().waitUntilFinish();
     }
     /**
      * Concept #2: You can make your pipeline assembly code less verbose by defining your DoFns
@@ -171,7 +177,8 @@ public class WordCountJob {
 
         /** Set this required option to specify where to write the output. */
         @Description("Path of the file to write to")
-        @Required
+        @Default.String("/tmp/output")
+        //@Required
         String getOutput();
 
         void setOutput(String value);

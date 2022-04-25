@@ -64,7 +64,6 @@ public class WorkerPublisherRemoteObservable<T> implements WorkerPublisher<T> {
         if (stage instanceof KeyValueStageConfig) {
             LegacyTcpPushServer modernServer = startKeyValueStage((KeyValueStageConfig<?, ?, T>) stage, toServe);
             server = new LegacyRxServer<>(modernServer);
-
         } else if (stage instanceof ScalarToScalar || stage instanceof KeyToScalar || stage instanceof GroupToScalar) {
             if (runNewW2Wserver(jobName)) {
                 logger.info("Modern server setup for name: " + name + " type: Scalarstage");

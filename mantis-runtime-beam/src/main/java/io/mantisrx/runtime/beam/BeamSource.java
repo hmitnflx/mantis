@@ -16,6 +16,7 @@
 
 package io.mantisrx.runtime.beam;
 
+import com.mantisrx.common.utils.Closeables;
 import io.mantisrx.runtime.Context;
 import io.mantisrx.runtime.source.Index;
 import io.mantisrx.runtime.source.Source;
@@ -174,4 +175,9 @@ public class BeamSource<T> implements Source<byte[]> {
 
     return subjects.asObservable();
   }
+
+    @Override
+    public void close() throws IOException {
+        Closeables.combine(readers).close();
+    }
 }

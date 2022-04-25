@@ -1,8 +1,9 @@
 apply plugin: 'java-library'
 
 task execute(type: JavaExec) {
-    main = "com.netflix.mantis.samples.beam.WordCount"
+    main = "com.netflix.mantis.samples.beam.WordCountJob"
     classpath = sourceSets.main.runtimeClasspath
+    args = ["--output=/tmp/ouput.txt", "--runner=MantisRunner"]
 }
 
 ext {

@@ -16,7 +16,9 @@
 
 package io.mantisrx.runtime.beam;
 
-import io.mantisrx.runtime.MantisJob;
+import io.mantisrx.runtime.Job;
+import java.util.function.Function;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.beam.runners.core.construction.PTransformTranslation;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.options.PipelineOptions;
@@ -25,8 +27,7 @@ import org.apache.beam.sdk.runners.TransformHierarchy;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.values.PValue;
 
-import java.util.function.Function;
-
+@Slf4j
 public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
 
   private boolean finalized = false;
@@ -50,7 +51,9 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
 
     PTransform<?, ?> transform = node.getTransform();
     if (transform != null) {
+
       IMantisTransformTranslator<?> translator = translatorProvider.apply(transform);
+      log.info("composite transform {}: enter, directMapComposite {}", transform.getName(), translator != null);
       if (translator != null) {
         translate(node, translator);
         return CompositeBehavior.DO_NOT_ENTER_TRANSFORM;
@@ -63,6 +66,9 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
   public void leaveCompositeTransform(TransformHierarchy.Node node) {
     if (finalized) {
       throw new IllegalStateException("Attempting to traverse an already finalized pipeline!");
+    }
+    if (node.getTransform() != null) {
+      log.info("composite transform {}: leave", node.getTransform().getName());
     }
     if (node.isRootNode()) {
       finalized = true;
@@ -88,6 +94,13 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
     IMantisTransformTranslator<T> typedTranslator = (IMantisTransformTranslator<T>) translator;
     Pipeline pipeline = getPipeline();
     AppliedPTransform<?, ?, ?> appliedTransform = node.toAppliedPTransform(pipeline);
+    PTransform<?, ?> transform = node.getTransform();
+    if (transform == null) {
+      log.info("graph. node {} transform: null", node.getFullName());
+    } else {
+      log.info("graph. node {}", node.getFullName());
+      log.info("graph. stringify {}", Utils.stringifyTransform(appliedTransform));
+    }
     typedTranslator.translate(pipeline, appliedTransform, node, translationContext);
   }
 
@@ -96,7 +109,7 @@ public class MantisGraphVisitor extends Pipeline.PipelineVisitor.Defaults {
     // do nothing here
   }
 
-  public MantisJob getJob() {
-    return null;
+  public Job getJob() {
+    return translationContext.getMantisJobBuilder().buildJob();
   }
 }

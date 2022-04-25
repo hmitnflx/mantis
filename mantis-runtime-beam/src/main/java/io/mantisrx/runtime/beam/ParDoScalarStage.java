@@ -17,53 +17,37 @@
 package io.mantisrx.runtime.beam;
 
 import io.mantisrx.runtime.Context;
-import io.mantisrx.runtime.computation.ScalarComputation;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.beam.runners.core.*;
 import org.apache.beam.runners.core.construction.ParDoTranslation;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.runners.AppliedPTransform;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.sdk.transforms.reflect.DoFnInvoker;
+import org.apache.beam.sdk.transforms.reflect.DoFnInvokers;
 import org.apache.beam.sdk.util.WindowedValue;
 import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PCollectionView;
 import org.apache.beam.sdk.values.TupleTag;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import rx.Observable;
-import rx.subjects.PublishSubject;
+import rx.Subscription;
+import rx.schedulers.Schedulers;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
-public class ParDoScalarStage<T, R> implements ScalarComputation<byte[], byte[]> {
-  private static final SideInputReader emptySideInputReader = new SideInputReader() {
-    @Override
-    public <T> @Nullable T get(PCollectionView<T> view, BoundedWindow window) {
-      return null;
-    }
+public class ParDoScalarStage<T, R> extends BeamScalarComputation<byte[], byte[]> {
 
-    @Override
-    public <T> boolean contains(PCollectionView<T> view) {
-      return false;
-    }
-
-    @Override
-    public boolean isEmpty() {
-      return false;
-    }
-  };
-
-  private final AppliedPTransform<?, ?, ?> appliedTransform;
   private final DoFnRunner<T, R> doFnRunner;
   private final Coder inputCoder;
   private final MantisParDoOutputManager pardoOut;
+    private final DoFnInvoker<T, R> doFnInvoker;
 
-  public ParDoScalarStage(AppliedPTransform<?, ?, ?> appliedTransform) {
-    this.appliedTransform = appliedTransform;
+    public ParDoScalarStage(AppliedPTransform<?, ?, ?> appliedTransform) {
+    super(appliedTransform);
     final TupleTag<R> mainOutputTag;
     try {
       mainOutputTag = (TupleTag<R>) ParDoTranslation.getMainOutputTag(appliedTransform);
@@ -71,20 +55,24 @@ public class ParDoScalarStage<T, R> implements ScalarComputation<byte[], byte[]>
       log.warn("failed to create mainOutputTag ", e);
       throw new RuntimeException(e);
     }
+    Map<TupleTag<?>, PCollection<?>> outputs = Utils.getOutputs(appliedTransform);
     List<TupleTag<?>> otherOutputTags =
-        Objects.requireNonNull(Utils.getOutputs(appliedTransform)).keySet().stream()
-            .filter(ks -> !ks.equals(mainOutputTag))
-            .collect(Collectors.toList());
+            Objects.requireNonNull(outputs).keySet().stream()
+                    .filter(ks -> !ks.equals(mainOutputTag))
+                    .collect(Collectors.toList());
 
     PCollection input = (PCollection) Utils.getInput(appliedTransform);
     // Get the coder corresponding to the WindowedValue
     inputCoder = Utils.getCoder(input);
-    Map<TupleTag<?>, Coder<?>> outputValueCoders = Utils.getOutputValueCoders(appliedTransform);
-    pardoOut = new MantisParDoOutputManager(outputValueCoders);
+    Map<TupleTag<?>, Coder<?>> outputValueCoders = outputs.entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey, e -> Utils.getWindowedValueCoder(e.getValue())));
+
+    pardoOut = new MantisParDoOutputManager(stringifyTransform(), outputValueCoders);
+    DoFn<T, R> doFn = (DoFn<T, R>) Utils.getDoFn(appliedTransform);
     this.doFnRunner = DoFnRunners.simpleRunner(
             appliedTransform.getPipeline().getOptions(),
-            (DoFn<T, R>) Utils.getDoFn(appliedTransform),
-            emptySideInputReader,
+            doFn,
+            EmptySideInputReader.INSTANCE,
             pardoOut,
             mainOutputTag,
             otherOutputTags,
@@ -97,21 +85,28 @@ public class ParDoScalarStage<T, R> implements ScalarComputation<byte[], byte[]>
             ((PCollection<?>) input).getWindowingStrategy(),
             ParDoTranslation.getSchemaInformation(appliedTransform),
             ParDoTranslation.getSideInputMapping(appliedTransform));
+    // Need a way to close this out here!
+    this.doFnInvoker = DoFnInvokers.tryInvokeSetupFor(doFn, appliedTransform.getPipeline().getOptions());
   }
 
   @Override
   public Observable<byte[]> call(Context context, Observable<byte[]> tObservable) {
-    tObservable.forEach(bytes -> {
+    pardoOut.clear();
+    // consider using lift here instead to make the implementation simpler
+    Subscription sub = tObservable.doOnNext(bytes -> {
       doFnRunner.startBundle();
       WindowedValue<T> objectWindowedValue = Utils.decodeWindowedValue(bytes, inputCoder);
       doFnRunner.processElement(objectWindowedValue);
       doFnRunner.finishBundle();
-    });
+    }).subscribeOn(Schedulers.computation()).subscribe();
 
-    return pardoOut.asObservable();
+    return pardoOut.getSubject().doOnSubscribe(() ->
+                    log.info("subscription received for {}", getAppliedTransform().getFullName()))
+            .doOnUnsubscribe(() ->
+                    log.info("unsubscribe received for {}", getAppliedTransform().getFullName()));
   }
 
-  private class NotImplementedStepContext implements StepContext {
+  private static class NotImplementedStepContext implements StepContext {
     @Override
     public StateInternals stateInternals() {
       throw new UnsupportedOperationException("Unimplemented state internals for stateless ParDo");
@@ -123,24 +118,4 @@ public class ParDoScalarStage<T, R> implements ScalarComputation<byte[], byte[]>
     }
   }
 
-  private static class MantisParDoOutputManager implements DoFnRunners.OutputManager {
-    private final Map<TupleTag<?>, Coder<?>> outputCoders;
-    private final PublishSubject<byte[]> subject;
-
-    MantisParDoOutputManager(Map<TupleTag<?>, Coder<?>> outputCoders) {
-      this.outputCoders = outputCoders;
-      this.subject = PublishSubject.create();
-    }
-
-    Observable<byte[]> asObservable() {
-      return subject.asObservable();
-    }
-
-    @Override
-    public <R> void output(TupleTag<R> tag, WindowedValue<R> output) {
-      Coder coder = outputCoders.get(tag);
-      byte[] encode = Utils.encode(output, coder);
-      subject.onNext(encode);
-    }
-  }
 }

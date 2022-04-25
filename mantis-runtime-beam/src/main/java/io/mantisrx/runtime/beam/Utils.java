@@ -24,6 +24,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.annotation.Nonnull;
+import org.apache.beam.runners.core.construction.PTransformTranslation;
 import org.apache.beam.runners.core.construction.ParDoTranslation;
 import org.apache.beam.runners.core.construction.TransformInputs;
 import org.apache.beam.sdk.Pipeline;
@@ -256,6 +257,26 @@ public class Utils {
       WindowedValue.FullWindowedValueCoder elementCoder) {
     return WindowedValue.FullWindowedValueCoder.of(
         ListCoder.of(elementCoder.getValueCoder()), elementCoder.getWindowCoder());
+  }
+
+  public static String stringifyTransform(AppliedPTransform<?, ?, ?> appliedTransform) {
+    if (appliedTransform == null) {
+        return "null";
+    }
+
+    PTransform<?, ?> transform = appliedTransform.getTransform();
+    return "\n" +
+            String.format("\ngraph. transform:%s urn:%s,", transform.getName(), PTransformTranslation.urnForTransform(transform)) +
+            String.format("\ngraph. fullname : %s,", appliedTransform.getFullName()) +
+            String.format("\ngraph. inputs   : %s,", stringifyPCollectionMap(appliedTransform.getInputs())) +
+            String.format("\ngraph. outputs  : %s", stringifyPCollectionMap(appliedTransform.getOutputs())) +
+            "\n";
+  }
+
+  private static String stringifyPCollectionMap(Map<TupleTag<?>, PCollection<?>> pvals) {
+    return pvals.entrySet().stream()
+            .map(e -> String.format("(%s):%s", e.getKey().getId(), e.getValue().getName()))
+            .collect(Collectors.joining(","));
   }
 
   /** A wrapper of {@code byte[]} that can be used as a hash-map key. */

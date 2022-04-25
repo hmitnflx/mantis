@@ -21,13 +21,7 @@ import io.mantisrx.common.network.Endpoint;
 import io.mantisrx.runtime.Context;
 import io.mantisrx.runtime.Job;
 import io.mantisrx.runtime.StageConfig;
-import io.reactivex.mantis.remote.observable.ConnectToGroupedObservable;
-import io.reactivex.mantis.remote.observable.EndpointChange;
-import io.reactivex.mantis.remote.observable.EndpointInjector;
-import io.reactivex.mantis.remote.observable.PortSelectorWithinRange;
-import io.reactivex.mantis.remote.observable.RemoteObservable;
-import io.reactivex.mantis.remote.observable.RemoteRxServer;
-import io.reactivex.mantis.remote.observable.ServeGroupedObservable;
+import io.reactivex.mantis.remote.observable.*;
 import java.util.Iterator;
 import java.util.List;
 import junit.framework.Assert;
@@ -38,9 +32,18 @@ import rx.Subscriber;
 import rx.functions.Func1;
 import rx.observables.GroupedObservable;
 import rx.subjects.BehaviorSubject;
+import rx.subjects.PublishSubject;
 
 
 public class StageExecutorsGroupByTest {
+
+
+    @Test
+    public void chainSubjects() {
+        PublishSubject<String> sub = PublishSubject.create();
+        sub.onNext("1");
+        sub.onNext("2");
+    }
 
     @SuppressWarnings( {"rawtypes", "unchecked"})
     @Test

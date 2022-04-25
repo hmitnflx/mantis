@@ -16,12 +16,16 @@
 
 package io.mantisrx.runtime.beam;
 
-import io.mantisrx.runtime.MantisJob;
+import io.mantisrx.runtime.Job;
+import io.mantisrx.runtime.StageConfig;
 import io.mantisrx.runtime.beam.api.MantisConfig;
 import io.mantisrx.runtime.beam.api.MantisInstance;
+import io.mantisrx.runtime.executor.LocalJobExecutorNetworked;
+import io.mantisrx.runtime.parameter.Parameter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.beam.runners.core.SplittableParDoViaKeyedWorkItems;
 import org.apache.beam.runners.core.construction.PTransformMatchers;
 import org.apache.beam.runners.core.construction.SplittableParDo;
@@ -32,11 +36,9 @@ import org.apache.beam.sdk.PipelineRunner;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.runners.PTransformOverride;
 import org.apache.beam.sdk.transforms.PTransform;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+@Slf4j
 public class MantisRunner extends PipelineRunner<MantisPipelineResult> {
-  private static final Logger LOG = LoggerFactory.getLogger(MantisRunner.class);
 
   /**
    * Needed because that's how apache-beam pipeline is instatiated via reflection when the runner is
@@ -73,22 +75,31 @@ public class MantisRunner extends PipelineRunner<MantisPipelineResult> {
   public MantisPipelineResult run(Pipeline pipeline) {
     try {
       normalize(pipeline);
-      MantisJob jobDag = translate(pipeline);
+
+      Job jobDag = translate(pipeline);
       return run(jobDag);
     } catch (UnsupportedOperationException uoe) {
-      LOG.error("Failed running pipeline!", uoe);
+      log.error("Failed running pipeline!", uoe);
       return new FailedRunningPipelineResults(uoe);
     }
   }
 
-  private MantisPipelineResult run(MantisJob jobDag) {
-    return null;
+  private MantisPipelineResult run(Job jobDag) {
+    Parameter p1 = new Parameter("foo1", "value");
+    Parameter p2 = new Parameter("foo2", "value");
+    LocalJobExecutorNetworked.execute(jobDag, p1, p2);
+    return new MantisPipelineResult();
   }
 
-  private MantisJob translate(Pipeline pipeline) {
+  private Job translate(Pipeline pipeline) {
     MantisGraphVisitor graphVisitor = new MantisGraphVisitor(options, translatorProvider);
     pipeline.traverseTopologically(graphVisitor);
-    return graphVisitor.getJob();
+    Job job = graphVisitor.getJob();
+    job.getStages().forEach(x -> {if (x instanceof StageConfig) {
+      log.info("description {}",((StageConfig<?, ?>) x).getDescription());
+    }
+    });
+    return job;
   }
 
   private void normalize(Pipeline pipeline) {
